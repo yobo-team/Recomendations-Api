@@ -1,51 +1,64 @@
-from flask import Flask, jsonify, request
+from flask import Flask, request, jsonify
 import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
-import joblib
+from sklearn.metrics.pairwise import cosine_similarity
+from flask_cors import CORS
 
 app = Flask(__name__)
+CORS(app)
 
-@app.route('/')
-def hello():
-    return 'Hello, this is your Flask app!'
+books = pd.read_csv('Books.csv')
+ratings = pd.read_csv('Ratings.csv')
 
-# Load the necessary data and model
-books_df = pd.read_csv('Books.csv', dtype={'Year-Of-Publication': str})
-books_df.rename(columns={
-    'ISBN': 'isbn',
-    'Book-Title': 'book_title',
-    'Book-Author': 'book_author',
-    'Year-Of-Publication': 'pub_year',
-    'Publisher': 'publisher',
-    'Image-URL-S': 'image_s_url',
-    'Image-URL-M': 'image_m_url',
-    'Image-URL-L': 'image_l_url'
-}, inplace=True)
+books_ratings = pd.merge(ratings, books, on=['ISBN'])
 
-books = books_df[['book_title', 'book_author', 'image_l_url']].copy()
-books.loc[:,'book_author'].fillna('', inplace=True)
+books = books[:10000]
+ratings = ratings[:5000]
 
 tfidf = TfidfVectorizer()
-tfidf_matrix = tfidf.fit_transform(books['book_author'])
+tfidf_matrix = tfidf.fit_transform(books['Book-Author'].fillna(''))
 
-cosine_sim_loaded = joblib.load('cosine_similarity.pkl')
+cosine_sim = cosine_similarity(tfidf_matrix)
 
-# Function to recommend books based on author similarity
-def author_recommendations_with_image(book_title, similarity_data, items, k=10):
-    idx = books.loc[books['book_title'] == book_title].index[0]
-    sim_scores = list(enumerate(similarity_data[idx]))
-    sim_scores = sorted(sim_scores, key=lambda x: x[1], reverse=True)
-    sim_scores = sim_scores[1:k+1]
-    book_indices = [i[0] for i in sim_scores]
-    return items.iloc[book_indices]
+def author_recommendations(book_titles, similarity_data=cosine_sim, items=books, k=20):
+    book_indices = []
+    for book_title in book_titles:
+        book_index = books[books['Book-Title'] == book_title].index
+        if not book_index.empty:
+            book_indices.append(book_index[0])
 
-@app.route('/recommend', methods=['POST'])
-def recommend_books():
+    recommendations = []
+    seen_books = set()
+    for index in book_indices:
+        sim_scores = list(enumerate(similarity_data[index]))
+        sim_scores = sorted(sim_scores, key=lambda x: x[1], reverse=True)
+        sim_scores = sim_scores[1:k+1]
+        book_indices = [i[0] for i in sim_scores]
+        books_data = list(items.iloc[book_indices].to_dict(orient='records'))
+        
+        unique_books = []
+        for book in books_data:
+            author = book['Book-Author']
+            if author not in seen_books:
+                unique_books.append(book)
+                seen_books.add(author)
+        
+        unique_books.sort(key=lambda x: x['Book-Author'])
+        recommendations.extend(unique_books)
+
+    return recommendations
+
+@app.route('/recommendations', methods=['POST'])
+def get_recommendations():
     data = request.get_json()
-    book_title = data['book_title']
-    recommendations_with_image = author_recommendations_with_image(book_title, cosine_sim_loaded, books)
-    recommendations_json = recommendations_with_image.to_json(orient='records')
-    return jsonify(recommendations_json)
+    book_titles = data.get('book_titles')
+
+    if not book_titles or not isinstance(book_titles, list):
+        return jsonify({'error': 'Please provide a list of book titles.'}), 400
+
+    recommendations = author_recommendations(book_titles)
+
+    return jsonify({'recommendations': recommendations})
 
 if __name__ == '__main__':
     app.run(debug=True)

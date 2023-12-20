@@ -31,7 +31,7 @@ def author_recommendations(book_titles, similarity_data=cosine_sim, items=books,
     book_indices = []
     # Find indices of input book titles in the books dataframe
     for book_title in book_titles:
-        book_index = books[books['Book-Title'] == book_title].index
+        book_index = books[books['Book-Title'].str.lower() == book_title.lower()].index
         if not book_index.empty:
             book_indices.append(book_index[0])
 
@@ -72,7 +72,7 @@ def author_recommendations(book_titles, similarity_data=cosine_sim, items=books,
 @app.route('/recommendations', methods=['GET','POST'])
 def get_recommendations():
     data = request.get_json()
-    book_titles = data.get('book_titles')
+    book_titles = data.get('titles')
 
     if not book_titles or not isinstance(book_titles, list):
         return jsonify({'status': False, 'message': 'Please provide a list of book titles.'}), 400

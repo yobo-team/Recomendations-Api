@@ -14,7 +14,7 @@ RUN pip install -r requirements.txt
 COPY . .
 
 # Build the model and load necessary data (Assuming app.py has a script to build the model)
-RUN python app.py --build-model
+RUN python main.py --build-model
 
 # Command to start the application using Gunicorn
-CMD exec gunicorn --bind :$PORT --worker 1 --threads 8 --timeout 0 app:app
+CMD exec gunicorn --bind :$PORT --worker 1 --threads 8 --timeout 0 main:app

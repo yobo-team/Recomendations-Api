@@ -4,24 +4,32 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from flask_cors import CORS
 
+# Initialize Flask app
 app = Flask(__name__)
 CORS(app)
 
+# Load CSV data (modify paths if needed)
 books = pd.read_csv('Books.csv')
 ratings = pd.read_csv('Ratings.csv')
 
+# Merge books and ratings data on ISBN
 books_ratings = pd.merge(ratings, books, on=['ISBN'])
 
+# Limit data size for efficiency (adjust limits as needed)
 books = books[:10000]
 ratings = ratings[:5000]
 
+# Create tfidf vectorizer for author analysis
 tfidf = TfidfVectorizer()
 tfidf_matrix = tfidf.fit_transform(books['Book-Author'].fillna(''))
 
+# Calculate cosine similarity matrix
 cosine_sim = cosine_similarity(tfidf_matrix)
 
+# Function to recommend books based on author similarity
 def author_recommendations(book_titles, similarity_data=cosine_sim, items=books, k=20):
     book_indices = []
+    # Find indices of input book titles in the books dataframe
     for book_title in book_titles:
         book_index = books[books['Book-Title'] == book_title].index
         if not book_index.empty:
@@ -29,6 +37,7 @@ def author_recommendations(book_titles, similarity_data=cosine_sim, items=books,
 
     recommendations = []
     seen_books = set()
+    # Iterate through found book indices
     for index in book_indices:
         sim_scores = list(enumerate(similarity_data[index]))
         sim_scores = sorted(sim_scores, key=lambda x: x[1], reverse=True)
@@ -37,6 +46,7 @@ def author_recommendations(book_titles, similarity_data=cosine_sim, items=books,
         books_data = list(items.iloc[book_indices].to_dict(orient='records'))
         
     unique_books = []
+    # Filter and build recommended book data
     for book in books_data:
         author = book['Book-Author']
         if author not in seen_books:
@@ -58,6 +68,7 @@ def author_recommendations(book_titles, similarity_data=cosine_sim, items=books,
     
     return recommendations
 
+# API endpoint for recommendations
 @app.route('/recommendations', methods=['GET','POST'])
 def get_recommendations():
     data = request.get_json()
@@ -74,5 +85,6 @@ def get_recommendations():
         'data': recommendations
     })
 
+# Run Flask app in debug mode on port 8080
 if __name__ == '__main__':
     app.run(debug=True, port=8080)

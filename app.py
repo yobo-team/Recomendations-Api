@@ -3,35 +3,59 @@ import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from flask_cors import CORS
+import pickle
+import os
 
 # Initialize Flask app
 app = Flask(__name__)
 CORS(app)
 
-# Load CSV data (modify paths if needed)
-books = pd.read_csv('Books.csv')
-ratings = pd.read_csv('Ratings.csv')
+# Function to generate the cosine similarity matrix and save it as a pickle file
+def generate_cosine_similarity():
+    # Load CSV data (modify paths if needed)
+    books = pd.read_csv('Books.csv')
+    ratings = pd.read_csv('Ratings.csv')
 
-# Merge books and ratings data on ISBN
-books_ratings = pd.merge(ratings, books, on=['ISBN'])
+    # Merge books and ratings data on ISBN
+    books_ratings = pd.merge(ratings, books, on=['ISBN'])
 
-# Limit data size for efficiency (adjust limits as needed)
-books = books[:10000]
-ratings = ratings[:5000]
+    # Limit data size for efficiency (adjust limits as needed)
+    books = books[:10000]
+    ratings = ratings[:5000]
 
-# Create tfidf vectorizer for author analysis
-tfidf = TfidfVectorizer()
-tfidf_matrix = tfidf.fit_transform(books['Book-Author'].fillna(''))
+    # Create tfidf vectorizer for author analysis
+    tfidf = TfidfVectorizer()
+    tfidf_matrix = tfidf.fit_transform(books['Book-Author'].fillna(''))
 
-# Calculate cosine similarity matrix
-cosine_sim = cosine_similarity(tfidf_matrix)
+    # Calculate cosine similarity matrix
+    cosine_sim = cosine_similarity(tfidf_matrix)
+
+    # Save the cosine similarity matrix as a pickle file
+    with open('cosine_similarity.pkl', 'wb') as file:
+        pickle.dump(cosine_sim, file)
+    print("Cosine similarity matrix saved as 'cosine_similarity.pkl'.")
+    return cosine_sim, books  # Return cosine_sim and books
+
+# Load or generate the cosine similarity matrix and books DataFrame
+if os.path.exists('cosine_similarity.pkl'):
+    try:
+        with open('cosine_similarity.pkl', 'rb') as file:
+            cosine_sim = pickle.load(file)
+        print("Cosine similarity matrix loaded from 'cosine_similarity.pkl'.")
+    except Exception as e:
+        print(f"Error loading pickle file: {e}")
+        cosine_sim, _ = generate_cosine_similarity()  # Unpack the result tuple, but ignore books
+else:
+    cosine_sim, _ = generate_cosine_similarity()  # Unpack the result tuple, but ignore books
 
 # Function to recommend books based on author similarity
-def author_recommendations(book_titles, similarity_data=cosine_sim, items=books, k=20):
+def author_recommendations(book_titles, similarity_data=cosine_sim, items=None, k=20):
+    if items is None:
+        _, items = generate_cosine_similarity()  # Regenerate books if not passed
     book_indices = []
     # Find indices of input book titles in the books dataframe
     for book_title in book_titles:
-        book_index = books[books['Book-Title'].str.lower() == book_title.lower()].index
+        book_index = items[items['Book-Title'] == book_title].index
         if not book_index.empty:
             book_indices.append(book_index[0])
 
@@ -72,11 +96,12 @@ def author_recommendations(book_titles, similarity_data=cosine_sim, items=books,
 @app.route('/recommendations', methods=['GET','POST'])
 def get_recommendations():
     data = request.get_json()
-    book_titles = data.get('titles')
+    book_titles = data.get('book_titles')
 
     if not book_titles or not isinstance(book_titles, list):
         return jsonify({'status': False, 'message': 'Please provide a list of book titles.'}), 400
 
+    # Call author_recommendations function with book_titles
     recommendations = author_recommendations(book_titles)
 
     return jsonify({

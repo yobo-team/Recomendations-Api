@@ -10,19 +10,16 @@ import os
 app = Flask(__name__)
 CORS(app)
 
-# Define paths
-data_folder = '<USE YOUR FOLDER ROOT>' #Replace it with the root folder of your project that containing pickle files and datasets
-pickle_file_path = os.path.join(data_folder, 'cosine_similarity.pkl')
-
-# Load CSV data (modify paths if needed)
-books = pd.read_csv(os.path.join(data_folder, 'Books.csv'))[:10000]
-ratings = pd.read_csv(os.path.join(data_folder, 'Ratings.csv'))[:5000]
+# Load CSV data using relative paths
+books = pd.read_csv('Books.csv')[:10000]
+ratings = pd.read_csv('Ratings.csv')[:5000]
 
 # Create tfidf vectorizer for author analysis
 tfidf = TfidfVectorizer()
 tfidf_matrix = tfidf.fit_transform(books['Book-Author'].fillna(''))
 
 # Calculate cosine similarity matrix if not already generated
+pickle_file_path = 'cosine_similarity.pkl'
 if not os.path.exists(pickle_file_path):
     cosine_sim = cosine_similarity(tfidf_matrix)
     with open(pickle_file_path, 'wb') as file:
@@ -52,20 +49,32 @@ def author_recommendations(book_titles, similarity_data=cosine_sim, items=books,
             for book in books_data:
                 author = book['Book-Author']
                 if author not in seen_books:
-                    unique_books.append(book)
+                    unique_books.append({
+                        'isbn': book['ISBN'],
+                        'title': book['Book-Title'],
+                        'author': book['Book-Author'],
+                        'year': book['Year-Of-Publication'],
+                        'publish': book['Publisher'],
+                        'image': {
+                            's': book['Image-URL-S'],
+                            'm': book['Image-URL-M'],
+                            'l': book['Image-URL-L']
+                        }
+                    })
                     seen_books.add(author)
 
-            unique_books.sort(key=lambda x: x['Book-Author'])
             recommendations.extend(unique_books)
 
     return recommendations
 
+# Function to sort books by year of publication
 def sortBookByYear(similarity_data=cosine_sim, items=books, ratings_data=ratings, k=20):
     books_cleaned = books[books['Year-Of-Publication'] != 0]
     df_books_sorted = books_cleaned.sort_values(by='Year-Of-Publication', ascending=False)
     recommendations = df_books_sorted.to_dict(orient='records')
     return recommendations
 
+# Function to format the data rows
 def formatted_data_rows(recommendations):
     formatted_data = [
         {
@@ -110,6 +119,6 @@ def get_book_sort_year():
         'data': formatted_data
     })
 
-# Run Flask app in debug mode on port 8080
+# Run Flask app in debug mode on 0.0.0.0:8080
 if __name__ == '__main__':
-    app.run(debug=True, port=8080)
+    app.run(host='0.0.0.0', debug=True, port=int(os.environ.get('PORT', 8080)))

@@ -36,29 +36,43 @@ def author_recommendations(book_titles, similarity_data=cosine_sim, items=books,
         book_indices = [i[0] for i in sim_scores]
         books_data = list(items.iloc[book_indices].to_dict(orient='records'))
         
-        unique_books = []
-        for book in books_data:
-            author = book['Book-Author']
-            if author not in seen_books:
-                unique_books.append(book)
-                seen_books.add(author)
+    unique_books = []
+    for book in books_data:
+        author = book['Book-Author']
+        if author not in seen_books:
+            unique_books.append({
+                'isbn': book['ISBN'],
+                'title': book['Book-Title'],
+                'author': book['Book-Author'],
+                'year': book['Year-Of-Publication'],
+                'publish': book['Publisher'],
+                'image': {
+                    's': book['Image-URL-S'],
+                    'm': book['Image-URL-M'],
+                    'l': book['Image-URL-L']
+                }
+            })
+            seen_books.add(author)
         
-        unique_books.sort(key=lambda x: x['Book-Author'])
         recommendations.extend(unique_books)
-
+    
     return recommendations
 
-@app.route('/recommendations', methods=['POST'])
+@app.route('/recommendations', methods=['GET','POST'])
 def get_recommendations():
     data = request.get_json()
     book_titles = data.get('book_titles')
 
     if not book_titles or not isinstance(book_titles, list):
-        return jsonify({'error': 'Please provide a list of book titles.'}), 400
+        return jsonify({'status': False, 'message': 'Please provide a list of book titles.'}), 400
 
     recommendations = author_recommendations(book_titles)
 
-    return jsonify({'recommendations': recommendations})
+    return jsonify({
+        'status': True,
+        'message': 'List Book Successfully',
+        'data': recommendations
+    })
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=True, port=8080)

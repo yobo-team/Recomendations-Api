@@ -1,20 +1,22 @@
-# Use the official Python 3.11 image
-FROM python:3.11
+# Use the official lightweight Python image
+FROM python:3.9-slim
 
-# Set the working directory inside the container to /app
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE 1
+ENV PYTHONUNBUFFERED 1
+
+# Set the working directory in the container
 WORKDIR /app
 
-# Copy the requirements file into the container's working directory
-COPY requirements.txt .
+# Copy your application code into the container
+COPY . /app
 
-# Install required Python packages based on the requirements.txt file
-RUN pip install -r requirements.txt
+# Install any needed dependencies specified in requirements.txt
+RUN pip install --no-cache-dir flask pandas scikit-learn flask-cors gunicorn
 
-# Copy the contents of the current directory into the container's working directory (/app)
-COPY . .
+# Expose the port for Google Cloud Run
+ENV PORT 8080
+EXPOSE $PORT
 
-# Build the model and load necessary data (Assuming app.py has a script to build the model)
-RUN python main.py --build-model
-
-# Command to start the application using Gunicorn
-CMD exec gunicorn --bind :$PORT --worker 1 --threads 8 --timeout 0 main:app
+# Run the app using gunicorn (replace app_name with your actual Flask app file name)
+CMD exec gunicorn --bind :$PORT --workers 1 --threads 8 --timeout 0 main:app

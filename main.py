@@ -75,7 +75,7 @@ def sortBookByYear(similarity_data=cosine_sim, items=books, ratings_data=ratings
     return recommendations
 
 # Function detil books
-def book_detil(book_id):
+def book_detail(book_id):
     matching_books = books[books['ISBN'] == str(book_id)]
     if matching_books.empty:
         return None
@@ -126,9 +126,9 @@ def get_book_sort_year():
         'data': formatted_data
     })
 
-@app.route('/detil/<string:id>', methods=['GET'])
+@app.route('/detail/<string:id>', methods=['GET'])
 def get_detail_book(id):
-    data = book_detil(id)
+    data = book_detail(id)
     if data is None:
         return jsonify({'statut': False, 'massage': 'Book not found'}), 404
 

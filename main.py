@@ -74,6 +74,13 @@ def sortBookByYear(similarity_data=cosine_sim, items=books, ratings_data=ratings
     recommendations = df_books_sorted.to_dict(orient='records')
     return recommendations
 
+# Function detil books
+def book_detil(book_id):
+    matching_books = books[books['ISBN'] == str(book_id)]
+    if matching_books.empty:
+        return None
+    return matching_books.to_dict('records')[0]
+
 # Function to format the data rows
 def formatted_data_rows(recommendations):
     formatted_data = [
@@ -119,6 +126,19 @@ def get_book_sort_year():
         'data': formatted_data
     })
 
+@app.route('/detil/<string:id>', methods=['GET'])
+def get_detail_book(id):
+    data = book_detil(id)
+    if data is None:
+        return jsonify({'statut': False, 'massage': 'Book not found'}), 404
+
+    formatted_data = formatted_data_rows([data])
+
+    return jsonify({
+        'status': True,
+        'message': 'Book details',
+        'data': formatted_data
+    })
 # Run Flask app in debug mode on 0.0.0.0:8080
 if __name__ == '__main__':
     app.run(host='0.0.0.0', debug=True, port=int(os.environ.get('PORT', 8080)))

@@ -30,7 +30,6 @@ else:
         cosine_sim = pickle.load(file)
     print("Cosine similarity matrix loaded from 'cosine_similarity.pkl'.")
 
-# Function to recommend books based on author similarity
 def author_recommendations(book_titles, similarity_data=cosine_sim, items=books, k=20):
     recommendations = []
     seen_books = set()
@@ -65,16 +64,23 @@ def author_recommendations(book_titles, similarity_data=cosine_sim, items=books,
 
             recommendations.extend(unique_books)
 
-    return recommendations
+    return recommendations[:10]  # Limit recommendations to 10
 
 # Function to sort books by year of publication
-def sortBookByYear(similarity_data=cosine_sim, items=books, ratings_data=ratings, k=20):
+def sortBookByYear(similarity_data=cosine_sim, items=books, ratings_data=ratings, k=5):
     books_cleaned = books[books['Year-Of-Publication'] != 0]
     df_books_sorted = books_cleaned.sort_values(by='Year-Of-Publication', ascending=False)
-    recommendations = df_books_sorted.to_dict(orient='records')
+    recommendations = df_books_sorted.head(k).to_dict(orient='records')
     return recommendations
 
-# Function detil books
+# Function to sort books by author
+def sortBookByAuthor(similarity_data=cosine_sim, items=books, ratings_data=ratings, k=5):
+    books_cleaned = books[books['Book-Author'] != 0]
+    df_books_sorted = books_cleaned.sort_values(by='Book-Author', ascending=True)
+    recommendations = df_books_sorted.head(k).to_dict(orient='records')
+    return recommendations
+
+# Function to fetch book details by ISBN
 def book_detail(book_id):
     matching_books = books[books['ISBN'] == str(book_id)]
     if matching_books.empty:
@@ -98,47 +104,67 @@ def formatted_data_rows(recommendations):
         }
         for book in recommendations
     ]
-
     return formatted_data
 
-# API endpoint for recommendations
+# API endpoint for getting author recommendations
 @app.route('/recommendations', methods=['POST'])
 def get_recommendations():
     data = request.get_json()
-    book_titles = data.get('titles')
+    if not data or 'titles' not in data or not isinstance(data['titles'], list):
+        return jsonify({'status': False, 'message': 'Please provide a valid list of book titles.'}), 400
 
-    if not book_titles or not isinstance(book_titles, list):
-        return jsonify({'status': False, 'message': 'Please provide a list of book titles.'}), 400
-
+    book_titles = data['titles']
     recommendations = author_recommendations(book_titles)
 
-    return jsonify({'status': True, 'message': 'List Book Successfully', 'data': recommendations})
+    return jsonify({'status': True, 'message': 'List Book Successfully', 'data': recommendations[:10]})
 
+# API endpoint for sorting books by year
 @app.route('/sort_year', methods=['GET'])
 def get_book_sort_year():
-    recommendations = sortBookByYear()
+    try:
+        recommendations = sortBookByYear()
+        formatted_data = formatted_data_rows(recommendations)
 
-    formatted_data = formatted_data_rows(recommendations)
+        return jsonify({
+            'status': True,
+            'message': 'List Book Successfully',
+            'data': formatted_data
+        })
+    except Exception as e:
+        return jsonify({'status': False, 'message': f'Error: {str(e)}'}), 500
 
-    return jsonify({
-        'status': True,
-        'message': 'List Book Successfully',
-        'data': formatted_data
-    })
+# API endpoint for sorting books by author
+@app.route('/sort_author', methods=['GET'])
+def get_book_sort_author():
+    try:
+        recommendations = sortBookByAuthor()
+        formatted_data = formatted_data_rows(recommendations)
 
+        return jsonify({
+            'status': True,
+            'message': 'List Book Successfully',
+            'data': formatted_data
+        })
+    except Exception as e:
+        return jsonify({'status': False, 'message': f'Error: {str(e)}'}), 500
+
+# API endpoint for getting book details by ISBN
 @app.route('/detail/<string:id>', methods=['GET'])
 def get_detail_book(id):
-    data = book_detail(id)
-    if data is None:
-        return jsonify({'statut': False, 'massage': 'Book not found'}), 404
+    try:
+        data = book_detail(id)
+        if data is None:
+            return jsonify({'status': False, 'message': 'Book not found'}), 404
 
-    formatted_data = formatted_data_rows([data])
+        formatted_data = formatted_data_rows([data])
 
-    return jsonify({
-        'status': True,
-        'message': 'Book details',
-        'data': formatted_data
-    })
+        return jsonify({
+            'status': True,
+            'message': 'Book details',
+            'data': formatted_data
+        })
+    except Exception as e:
+        return jsonify({'status': False, 'message': f'Error: {str(e)}'}), 500
 # Run Flask app in debug mode on 0.0.0.0:8080
 if __name__ == '__main__':
     app.run(host='0.0.0.0', debug=True, port=int(os.environ.get('PORT', 8080)))
